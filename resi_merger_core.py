@@ -28,7 +28,7 @@ import threading
 from datetime import datetime
 
 from pypdf import PdfReader, PdfWriter
-from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler
 
 import config
@@ -286,17 +286,79 @@ class SessionController:
 		self.on_collect = on_collect
 		self.session = None
 		self.observer = None
+		# Snapshot nama file yang SUDAH ada di folder saat sesi mulai. File-file
+		# ini dianggap "lama" dan TIDAK PERNAH diproses — inilah pengaman utama
+		# anti-tercampur batch lama (sekuat event-only, tapi lebih tahan banting).
+		self._baseline = set()
+		self._stop_scan = threading.Event()
+		self._scan_thread = None
+
+	def _snapshot_baseline(self):
+		"""Catat semua file yang sudah ada di WATCH_FOLDER saat sesi mulai."""
+		baseline = set()
+		try:
+			for entry in os.scandir(config.WATCH_FOLDER):
+				if entry.is_file():
+					baseline.add(os.path.normcase(os.path.abspath(entry.path)))
+		except OSError:
+			pass
+		return baseline
+
+	def _scan_loop(self):
+		"""
+		Pemindai cadangan (polling): tiap POLL_INTERVAL, cari PDF baru yang
+		BELUM ada di baseline. Ini menjamin resi tetap tertangkap walau event
+		watchdog dari OS tidak datang (beberapa browser/AV memblok notifikasi).
+		File lama (ada di baseline) tidak pernah disentuh.
+		"""
+		interval = getattr(config, "POLL_INTERVAL", 2.0)
+		while not self._stop_scan.is_set():
+			try:
+				for entry in os.scandir(config.WATCH_FOLDER):
+					if not entry.is_file():
+						continue
+					key = os.path.normcase(os.path.abspath(entry.path))
+					if key in self._baseline:
+						continue
+					low = entry.name.lower()
+					if low.endswith((".crdownload", ".tmp", ".part")):
+						continue
+					if not low.endswith(".pdf"):
+						continue
+					# add_file aman dipanggil berulang: claim() men-dedup.
+					threading.Thread(
+						target=self.session.add_file, args=(entry.path,), daemon=True
+					).start()
+			except OSError:
+				pass
+			self._stop_scan.wait(interval)
 
 	def start(self):
 		ensure_folders()
 		self.session = ResiSession(self.on_log, self.on_collect)
+		# 1) Baseline dulu (sebelum apa pun) → file lama tercatat & diabaikan.
+		self._baseline = self._snapshot_baseline()
+		# 2) Watchdog event-driven (responsif). PollingObserver dipakai karena
+		#    lebih andal lintas browser/cloud-folder dibanding observer native.
 		handler = _Handler(self.session)
-		self.observer = Observer()
-		self.observer.schedule(handler, config.WATCH_FOLDER, recursive=False)
-		self.observer.start()
+		try:
+			self.observer = PollingObserver()
+			self.observer.schedule(handler, config.WATCH_FOLDER, recursive=False)
+			self.observer.start()
+		except Exception as e:
+			self.observer = None
+			self.on_log(f"⚠  Observer event gagal start ({e}) — andalkan pemindai berkala.")
+		# 3) Pemindai cadangan berbasis polling (jaminan deteksi).
+		self._stop_scan.clear()
+		self._scan_thread = threading.Thread(target=self._scan_loop, daemon=True)
+		self._scan_thread.start()
 		return self.session.session_dir
 
 	def _stop_observer(self):
+		self._stop_scan.set()
+		if self._scan_thread is not None:
+			self._scan_thread.join(timeout=5)
+			self._scan_thread = None
 		if self.observer is not None:
 			self.observer.stop()
 			self.observer.join()

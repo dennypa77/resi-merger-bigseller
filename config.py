@@ -47,6 +47,12 @@ STABLE_INTERVAL = 0.6
 # Batas maksimum menunggu file stabil (detik) — kalau lewat, file dilewati.
 STABLE_TIMEOUT = 30.0
 
+# Selang pemindai cadangan (detik). Tool memantau via event watchdog SEKALIGUS
+# memindai folder tiap POLL_INTERVAL detik sebagai jaminan — kalau notifikasi
+# event OS tidak datang (kasus sebagian browser/antivirus), resi tetap
+# tertangkap oleh pemindai ini. File lama (sudah ada saat sesi mulai) diabaikan.
+POLL_INTERVAL = 2.0
+
 # --- Updater ---------------------------------------------------------------
 
 # Repo GitHub sumber update (branch main).
