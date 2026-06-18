@@ -123,7 +123,22 @@ class ResiSession:
 		Proses satu kandidat resi: tunggu stabil, pindah ke folder sesi.
 		Dipanggil dari thread observer.
 		"""
-		if not is_resi_file(src_path):
+		name = os.path.basename(src_path)
+		low = name.lower()
+		# File download sementara browser — abaikan, tunggu rename ke .pdf.
+		if low.endswith((".crdownload", ".tmp", ".part")):
+			return
+		if not low.endswith(".pdf"):
+			return
+		# PDF, tapi nama tidak cocok kata kunci → beri tahu operator (sekali per file)
+		# supaya tahu kalau resinya tidak tertangkap karena penamaan.
+		if config.RESI_KEYWORDS and not any(kw.lower() in low for kw in config.RESI_KEYWORDS):
+			if self.claim(src_path):
+				self.on_log(
+					f"… '{name}' diabaikan: nama tidak mengandung kata kunci resi "
+					f"({', '.join(config.RESI_KEYWORDS)}). Kalau ini resi, tambahkan kata "
+					f"kuncinya di config.py atau kosongkan RESI_KEYWORDS = []."
+				)
 			return
 		if not self.claim(src_path):
 			return
