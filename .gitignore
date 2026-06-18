@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Backup updater
+*.bak
+*.new
+
+# Folder kerja/output lokal (kalau kebetulan dibuat di dalam repo)
+RESI_PROSES/
+RESI_MERGED/
+RESI_ARSIP/
+
+# OS
+Thumbs.db
+.DS_Store
