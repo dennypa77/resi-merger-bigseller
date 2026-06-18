@@ -29,14 +29,13 @@ ARCHIVE_FOLDER = str(Path.home() / "Downloads" / "RESI_ARSIP")
 
 # Kata kunci nama file untuk mengenali resi (case-insensitive).
 # Kalau list ini DIKOSONGKAN ([]), SEMUA file PDF dianggap resi.
-RESI_KEYWORDS = [
-	"shippinglabel",
-	"shipping_label",
-	"waybill",
-	"awb",
-	"resi",
-	"label",
-]
+#
+# CATATAN: BigSeller menamai resi dengan hash acak (mis.
+# "78456583ff654274-3ff8-4297-8b8a-...pdf") yang TIDAK mengandung kata kunci
+# apa pun. Karena selama sesi aktif hanya download BARU yang ditangkap, aman
+# mengosongkan list ini agar semua PDF yang masuk selama sesi dianggap resi.
+# Kalau mau selektif lagi, isi kembali dengan potongan nama file resi Anda.
+RESI_KEYWORDS = []
 
 # --- Parameter teknis (jarang perlu diubah) --------------------------------
 
